@@ -1,0 +1,95 @@
+# aetron-node — mainnet and testnet, side by side.
+#
+#   docker compose up -d mainnet
+#   docker compose up -d mainnet testnet
+#   docker compose --profile archive up -d mainnet-archive
+#   docker compose logs -f mainnet
+#
+# NODE_NAME sets the name this node reports to the network. Put it in a .env
+# file next to this one, or export it before running compose.
+
+name: aetron
+
+x-common: &common
+  image: ghcr.io/aetronai/aetron-node:latest
+  restart: unless-stopped
+  # RocksDB needs time to flush on shutdown. Killing the node early is the
+  # usual way to end up with a database that has to resync.
+  stop_grace_period: 60s
+  logging:
+    driver: json-file
+    options:
+      max-size: "50m"
+      max-file: "5"
+
+services:
+  mainnet:
+    <<: *common
+    container_name: aetron-mainnet
+    volumes:
+      - mainnet-data:/data
+    ports:
+      # libp2p has to be reachable from outside for peering.
+      - "30333:30333"
+      # RPC and metrics stay on loopback. Publish them on 0.0.0.0 only behind a
+      # reverse proxy you control.
+      - "127.0.0.1:9944:9944"
+      - "127.0.0.1:9615:9615"
+    command:
+      - --base-path=/data
+      - --chain=/etc/aetron/chainspecs/aetron-mainnet-raw.json
+      - --name=${NODE_NAME:-aetron-docker}
+      # Bootnodes come from the chain spec, so there is nothing to pass here.
+      # Required in a container: the RPC must listen on the container's own
+      # interface, not on its loopback. The host-side binding above is what
+      # keeps it private.
+      - --rpc-external
+      - --rpc-cors=all
+      - --rpc-methods=safe
+      - --prometheus-external
+
+  testnet:
+    <<: *common
+    container_name: aetron-testnet
+    volumes:
+      - testnet-data:/data
+    ports:
+      - "30334:30333"
+      - "127.0.0.1:9945:9944"
+      - "127.0.0.1:9616:9615"
+    command:
+      - --base-path=/data
+      - --chain=/etc/aetron/chainspecs/aetron-testnet-raw.json
+      - --name=${NODE_NAME:-aetron-docker}-testnet
+      - --rpc-external
+      - --rpc-cors=all
+      - --rpc-methods=safe
+      - --prometheus-external
+
+  # Full state and full block history — what an indexer or an explorer needs.
+  # Considerably more disk than the pruned services above, and it keeps growing.
+  mainnet-archive:
+    <<: *common
+    container_name: aetron-mainnet-archive
+    profiles: [archive]
+    volumes:
+      - mainnet-archive-data:/data
+    ports:
+      - "30335:30333"
+      - "127.0.0.1:9946:9944"
+      - "127.0.0.1:9617:9615"
+    command:
+      - --base-path=/data
+      - --chain=/etc/aetron/chainspecs/aetron-mainnet-raw.json
+      - --name=${NODE_NAME:-aetron-docker}-archive
+      - --state-pruning=archive
+      - --blocks-pruning=archive
+      - --rpc-external
+      - --rpc-cors=all
+      - --rpc-methods=safe
+      - --prometheus-external
+
+volumes:
+  mainnet-data:
+  testnet-data:
+  mainnet-archive-data:
