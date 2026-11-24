@@ -198,13 +198,6 @@ One thing to keep in mind: the native chain counts AET in 9 decimals and the EVM
 | `purge-chain` | Delete the database for a base path |
 | `chain-info` | Print database metadata |
 
-## macOS Gatekeeper
-
-macOS quarantines anything downloaded from the internet, and an unsigned binary is refused on the first run. Clear the flag on the extracted file:
-
-```bash
-xattr -d com.apple.quarantine ./aetron-node
-```
 
 ## Validators
 
